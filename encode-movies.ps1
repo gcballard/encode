@@ -542,6 +542,8 @@ $MoviesWithExtras = @{}  # Track which movies have extras (affects flat vs subfo
 $MovieSourceFiles = @{}  # Track source files per movie for archival
 $GroupTotalFiles = @{}   # Track total files per movie group (for safety check)
 $ExtrasPerMovie = @{}    # Count extras per movie (added to group total)
+$DryRunPlan = @()        # Table-friendly dry-run summary of planned encodes
+$DryRunCopies = @()      # Table-friendly dry-run summary of planned copies
 
 # Process extras first
 foreach ($Extra in $ExtraFiles) {
@@ -601,9 +603,18 @@ foreach ($Extra in $ExtraFiles) {
     
     $OutputFileName = "$DescriptiveName.mp4"
     $OutputPath = Join-Path $ExtraDir $OutputFileName
-    
+
     Write-Log "Encoding extra [$ExtraType]: $($Extra.Name) -> $PlexDirectory/$OutputFileName" "INFO"
     Write-Log "[DEBUG] Full output path: $OutputPath" "INFO"
+
+    if ($DryRun) {
+        $DryRunPlan += [PSCustomObject]@{
+            Movie  = $MovieName
+            Kind   = "Extra: $ExtraType"
+            Source = $Extra.Name
+            Output = $OutputPath
+        }
+    }
     
     $result = Invoke-HandBrakeEncoding -InputFile $Extra.FullName -OutputPath $OutputPath -PresetJson $PresetJson -PresetName $PresetName -HandBrakePath $HandBrakePath -DryRun $DryRun -Description "extra $ExtraType of $MovieName"
     
@@ -658,6 +669,15 @@ if ($Files.Count -eq 1) {
             $OutputPath = Join-Path $OutputDir $OutputFileName
         }
         Write-Log "Encoding movie: $($File.Name) -> $OutputFileName" "INFO"
+
+        if ($DryRun) {
+            $DryRunPlan += [PSCustomObject]@{
+                Movie  = $MovieName
+                Kind   = "Movie"
+                Source = $File.Name
+                Output = $OutputPath
+            }
+        }
         
         $result = Invoke-HandBrakeEncoding -InputFile $File.FullName -OutputPath $OutputPath -PresetJson $PresetJson -PresetName $PresetName -HandBrakePath $HandBrakePath -DryRun $DryRun -Description $File.Name
         
@@ -738,6 +758,15 @@ if ($Files.Count -eq 1) {
             $OutputPath = Join-Path $MovieDir $OutputFileName
             
             Write-Log "Encoding part $PartNumber of $MovieName`: $($File.Name) -> $OutputFileName" "INFO"
+
+            if ($DryRun) {
+                $DryRunPlan += [PSCustomObject]@{
+                    Movie  = $MovieName
+                    Kind   = "Movie Part $PartNumber"
+                    Source = $File.Name
+                    Output = $OutputPath
+                }
+            }
             
             $result = Invoke-HandBrakeEncoding -InputFile $File.FullName -OutputPath $OutputPath -PresetJson $PresetJson -PresetName $PresetName -HandBrakePath $HandBrakePath -DryRun $DryRun -Description "part $PartNumber of $MovieName"
             
@@ -772,6 +801,11 @@ if ($GroupHadSuccess -and -not [string]::IsNullOrWhiteSpace($FinalDest)) {
         
         if ($DryRun) {
             Write-Log "[DRY RUN] Would copy '$LocalMoviePath' -> '$DestMoviePath'" "INFO"
+            $DryRunCopies += [PSCustomObject]@{
+                Movie       = $MovieName
+                LocalPath   = $LocalMoviePath
+                Destination = $DestMoviePath
+            }
         }
         else {
             Write-Log "Starting background copy job for '$MovieName'" "INFO"
@@ -797,6 +831,31 @@ if ($GroupHadSuccess -and -not [string]::IsNullOrWhiteSpace($FinalDest)) {
 Write-Log "========== ENCODING COMPLETE ==========" "INFO"
 if ($DryRun) {
     Write-Log "DRY RUN - No files were actually encoded" "WARNING"
+
+    Write-Host ""
+    Write-Host "========== DRY RUN ENCODE PLAN ==========" -ForegroundColor Cyan
+    if ($DryRunPlan.Count -gt 0) {
+        $DryRunPlan |
+            Sort-Object Movie, Kind, Source |
+            Format-Table -Property Movie, Kind, Source, Output -AutoSize -Wrap
+    }
+    else {
+        Write-Host "No encodes planned." -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+    Write-Host "========== DRY RUN COPY PLAN ==========" -ForegroundColor Cyan
+    if ($DryRunCopies.Count -gt 0) {
+        $DryRunCopies |
+            Sort-Object Movie |
+            Format-Table -Property Movie, LocalPath, Destination -AutoSize -Wrap
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($FinalDest)) {
+        Write-Host "No copy jobs planned." -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "Copy skipped because -FinalDest is empty." -ForegroundColor Yellow
+    }
 }
 Write-Log "Successful: $SuccessCount" "SUCCESS"
 Write-Log "Failed: $FailureCount" "ERROR"

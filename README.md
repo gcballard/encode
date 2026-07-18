@@ -32,6 +32,13 @@ Movie encoding is dry-run by default. Add `-Encode` to actually run HandBrake.
 # Preview what would happen
 .\encode-movies.ps1 -SourceDir "N:\Videos" -PresetJson .\plexDVD2025.json
 
+# Preview with a reusable source directory variable
+$sourceDir = "D:\Video"
+.\encode-movies.ps1 -SourceDir $sourceDir -PresetJson "Z:\HandbrakeStuff\plexDVD2025.json" -PresetName Plex
+
+# Run the same command without dry run
+.\encode-movies.ps1 -SourceDir $sourceDir -PresetJson "Z:\HandbrakeStuff\plexDVD2025.json" -PresetName Plex -Encode
+
 # Actually encode, copy to X:\Movies, and archive source MKVs
 .\encode-movies.ps1 -SourceDir "N:\Videos" -PresetJson .\plexDVD2025.json -Encode
 
