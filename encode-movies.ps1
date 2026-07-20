@@ -105,19 +105,27 @@ if (-not (Test-Path $PresetJson)) {
     exit 1
 }
 
-if (-not (Test-Path $OutputDir)) {
+if (-not (Test-Path $OutputDir) -and $DryRun) {
+    Write-Log "[DRY RUN] Would create output directory: $OutputDir" "INFO"
+}
+elseif (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
 
 # Ensure archive directory exists
 if (-not $NoArchive) {
     if (-not (Test-Path $ArchiveDir)) {
-        try {
-            New-Item -ItemType Directory -Path $ArchiveDir -Force | Out-Null
-            Write-Log "Created archive directory: $ArchiveDir" "INFO"
+        if ($DryRun) {
+            Write-Log "[DRY RUN] Would create archive directory: $ArchiveDir" "INFO"
         }
-        catch {
-            Write-Log "Could not create archive directory '$ArchiveDir': $_" "WARNING"
+        else {
+            try {
+                New-Item -ItemType Directory -Path $ArchiveDir -Force | Out-Null
+                Write-Log "Created archive directory: $ArchiveDir" "INFO"
+            }
+            catch {
+                Write-Log "Could not create archive directory '$ArchiveDir': $_" "WARNING"
+            }
         }
     }
 }
@@ -182,6 +190,36 @@ function Get-TrackNumber {
     return $null
 }
 
+function Get-MoviePartSortKey {
+    param([string]$Filename)
+
+    $BaseName = [System.IO.Path]::GetFileNameWithoutExtension($Filename)
+
+    if ($BaseName -match '^[A-Za-z](\d+)(?:[_-]t(\d+))?$') {
+        $discNumber = [int]$matches[1]
+        $trackNumber = if ($matches[2]) { [int]$matches[2] } else { -1 }
+        return "{0:D4}-{1:D4}-{2}" -f $discNumber, $trackNumber, $BaseName
+    }
+
+    if ($BaseName -match '^([A-Za-z]\d+)[_-]t(\d+)$') {
+        $discNumber = [int]($matches[1] -replace '^[A-Za-z]', '')
+        $trackNumber = [int]$matches[2]
+        return "{0:D4}-{1:D4}-{2}" -f $discNumber, $trackNumber, $BaseName
+    }
+
+    $track = Get-TrackNumber $Filename
+    if ($null -ne $track) {
+        return "9998-{0:D4}-{1}" -f $track, $BaseName
+    }
+
+    $disc = Get-DiscNumber $Filename
+    if ($null -ne $disc) {
+        return "{0:D4}-9999-{1}" -f $disc, $BaseName
+    }
+
+    return "9999-9999-$BaseName"
+}
+
 # Remove track label from filename
 function Get-CleanedFilename {
     param([string]$Filename)
@@ -240,6 +278,7 @@ $ValidExtraTypes = @(
     'scene',
     'short',
     'trailer',
+    'documentary',
     'other'
 )
 
@@ -252,7 +291,46 @@ $ExtraTypeMapping = @{
     'scene'           = 'Scenes'
     'short'           = 'Shorts'
     'trailer'         = 'Trailers'
+    'documentary'     = 'Featurettes'
     'other'           = 'Other'
+}
+
+$ExtraDirectoryMapping = @{
+    'behindthescenes' = 'behindthescenes'
+    'behindthescene'  = 'behindthescenes'
+    'deletedscenes'   = 'deleted'
+    'deletedscene'    = 'deleted'
+    'deleted'         = 'deleted'
+    'featurettes'     = 'featurette'
+    'featurette'      = 'featurette'
+    'interviews'      = 'interview'
+    'interview'       = 'interview'
+    'scenes'          = 'scene'
+    'scene'           = 'scene'
+    'shorts'          = 'short'
+    'short'           = 'short'
+    'trailers'        = 'trailer'
+    'trailer'         = 'trailer'
+    'documentaries'   = 'documentary'
+    'documentary'     = 'documentary'
+    'other'           = 'other'
+}
+
+function Normalize-ExtraTypeName {
+    param([string]$Name)
+
+    return ($Name -replace '[^A-Za-z0-9]', '').ToLowerInvariant()
+}
+
+function Get-ExtraTypeFromName {
+    param([string]$Name)
+
+    $NormalizedName = Normalize-ExtraTypeName $Name
+    if ($ExtraDirectoryMapping.ContainsKey($NormalizedName)) {
+        return $ExtraDirectoryMapping[$NormalizedName]
+    }
+
+    return $null
 }
 
 # Check if filename contains an extra type suffix
@@ -261,9 +339,8 @@ function Get-ExtraType {
     
     $BaseName = [System.IO.Path]::GetFileNameWithoutExtension($Filename)
     
-    # Check if filename ends with any valid extra type suffix
     foreach ($ExtraType in $ValidExtraTypes) {
-        if ($BaseName -like "*-$ExtraType") {
+        if ($BaseName -like "*-$ExtraType" -or $BaseName -match ('-' + [regex]::Escape($ExtraType) + '$')) {
             return $ExtraType
         }
     }
@@ -271,32 +348,111 @@ function Get-ExtraType {
     return $null
 }
 
+function Get-ExtraTypeFromPath {
+    param([string]$FilePath)
+
+    $FileName = Split-Path $FilePath -Leaf
+    $BaseName = [System.IO.Path]::GetFileNameWithoutExtension($FileName)
+
+    $SuffixType = Get-ExtraType $FileName
+    if ($null -ne $SuffixType) {
+        return $SuffixType
+    }
+
+    # Support descriptive names like "Movie Name (1993) - Featurette - Extra Title.mkv".
+    if ($BaseName -match '^(?<Movie>.+?)\s+-\s+(?<ExtraType>[^-]+?)\s+-\s+(?<ExtraTitle>.+)$') {
+        $InlineType = Get-ExtraTypeFromName $matches['ExtraType']
+        if ($null -ne $InlineType) {
+            return $InlineType
+        }
+    }
+
+    $ParentDir = Split-Path (Split-Path $FilePath -Parent) -Leaf
+    $DirectoryType = Get-ExtraTypeFromName $ParentDir
+    if ($null -ne $DirectoryType) {
+        return $DirectoryType
+    }
+
+    return $null
+}
+
 # Extract movie name from extra filename (removes the extra suffix)
 function Get-MovieNameFromExtra {
     param([string]$FilePath)
-    
+
+    $FileName = Split-Path $FilePath -Leaf
+    $BaseName = [System.IO.Path]::GetFileNameWithoutExtension($FileName)
+
+    # Inline pattern: "Movie Name - ExtraType - ExtraTitle.mkv"
+    if ($BaseName -match '^(?<Movie>.+?)\s+-\s+(?<ExtraType>[^-]+?)\s+-\s+(?<ExtraTitle>.+)$') {
+        $InlineType = Get-ExtraTypeFromName $matches['ExtraType']
+        if ($null -ne $InlineType) {
+            return (Get-CleanMovieName $matches['Movie'])
+        }
+    }
+
+    # Suffix-based extra: "Movie Name-featurette.mkv" or "Movie Name - featurette.mkv"
+    $SuffixType = Get-ExtraType $FileName
+    if ($null -ne $SuffixType) {
+        $MovieName = $BaseName -replace ('-' + [regex]::Escape($SuffixType) + '$'), ''
+        return (Get-CleanMovieName $MovieName)
+    }
+
+    $ParentDir = Split-Path (Split-Path $FilePath -Parent) -Leaf
+    $DirectoryType = Get-ExtraTypeFromName $ParentDir
+
+    if ($null -ne $DirectoryType) {
+        $MovieName = Get-CleanMovieName (Split-Path (Split-Path (Split-Path $FilePath -Parent) -Parent) -Leaf)
+        return $MovieName
+    }
+
     # Get parent directory name - this is the movie folder, strip rip timestamps
-    $MovieName = Get-CleanMovieName (Split-Path -Parent $FilePath | Split-Path -Leaf)
+    $MovieName = Get-CleanMovieName $ParentDir
     return $MovieName
 }
 
 # Extract descriptive filename from extra, removing the suffix
 function Get-ExtraDescriptiveName {
-    param([string]$Filename)
+    param(
+        [string]$Filename,
+        [string]$MovieName = ""
+    )
     
     $BaseName = [System.IO.Path]::GetFileNameWithoutExtension($Filename)
+
+    if ($BaseName -match '^(?<Movie>.+?)\s+-\s+(?<ExtraType>[^-]+?)\s+-\s+(?<ExtraTitle>.+)$') {
+        $InlineType = Get-ExtraTypeFromName $matches['ExtraType']
+        if ($null -ne $InlineType) {
+            $InlineTitle = $matches['ExtraTitle'].Trim()
+            if (-not (Test-GenericName $InlineTitle)) {
+                return $InlineTitle
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($MovieName)) {
+                return $MovieName
+            }
+        }
+    }
     
     # Remove trailing extra type suffix (e.g., -trailer, -deleted, etc.)
     $Pattern = "-($(($ValidExtraTypes -join '|')))$"
     $DescriptiveName = $BaseName -replace $Pattern, ''
-    
+
+    if (Test-GenericName $DescriptiveName) {
+        if (-not [string]::IsNullOrWhiteSpace($MovieName)) {
+            return $MovieName
+        }
+
+        return Get-CleanMovieName (Split-Path -Leaf (Get-Location))
+    }
+
     return $DescriptiveName.Trim()
 }
 
 # Check if file is an extra
 function IsExtra {
-    param([string]$Filename)
-    return (Get-ExtraType $Filename) -ne $null
+    param([string]$FilePath)
+    return (Get-ExtraTypeFromPath $FilePath) -ne $null
 }
 
 # Detect source pixel aspect ratio from a HandBrake scan so anamorphic DVD
@@ -367,6 +523,31 @@ function Get-HandBrakeArguments {
     }
 
     return $arguments
+}
+
+function Get-RelativeDisplayPath {
+    param(
+        [string]$Path,
+        [string]$Root
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or [string]::IsNullOrWhiteSpace($Root)) {
+        return $Path
+    }
+
+    try {
+        $basePath = [System.IO.Path]::GetFullPath($Root, (Get-Location).Path).TrimEnd('\', '/')
+        $fullPath = [System.IO.Path]::GetFullPath($Path, (Get-Location).Path)
+
+        if ($fullPath.StartsWith($basePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $fullPath.Substring($basePath.Length).TrimStart('\', '/')
+        }
+    }
+    catch {
+        return $Path
+    }
+
+    return $Path
 }
 
 # Encode file with automatic x265 fallback
@@ -466,6 +647,22 @@ function Test-GenericName {
     return $false
 }
 
+function Test-MakeMkvGenericName {
+    param([string]$Name)
+
+    $BaseName = [System.IO.Path]::GetFileNameWithoutExtension($Name).Trim()
+
+    if (Test-GenericName $BaseName) { return $true }
+
+    if ($BaseName -match '^(title_)?t\d+$') { return $true }
+
+    if ($BaseName -match '^[a-z]\d+[_-]t\d+$') { return $true }
+
+    if ($BaseName -match '^[a-z]+[_-]t\d+$') { return $true }
+
+    return $false
+}
+
 # Remove rip timestamp suffixes from names (e.g., HANNA_20260516_194515 -> HANNA)
 function Get-CleanMovieName {
     param([string]$Name)
@@ -473,6 +670,53 @@ function Get-CleanMovieName {
     $Cleaned = $Name -replace '_\d{8}(_\d{6})?$', ''
     return $Cleaned.Trim('_')
 }
+
+function Get-MovieGroupName {
+    param(
+        [System.IO.FileInfo]$File,
+        [string]$DirectoryMode = ""
+    )
+
+    # In nested mode, prefer the parent directory name as the movie group
+    if ($DirectoryMode -eq 'Nested') {
+        $parentDir = Split-Path $File.DirectoryName -Leaf
+
+        # Prefer a sibling filename that includes a year (e.g., "Movie Name (1993)")
+        try {
+            $siblings = Get-ChildItem -Path $File.DirectoryName -Filter "*.mkv" -File -ErrorAction SilentlyContinue
+            foreach ($s in $siblings) {
+                if ($s.Name -match '^(?<Movie>.+?\(\d{4}\))\s*-') {
+                    $candidate = $matches['Movie'].Trim()
+                    $cleanCandidate = Get-CleanMovieName $candidate
+                    Write-Log "Nested mode: using sibling filename '$cleanCandidate' (contains year) as movie name for '$($File.Name)'" "INFO"
+                    return $cleanCandidate
+                }
+            }
+        }
+        catch {
+            # ignore and fallback to parent folder
+        }
+
+        $cleanParent = Get-CleanMovieName $parentDir
+        Write-Log "Nested mode: using parent folder '$cleanParent' as movie name for '$($File.Name)'" "INFO"
+        return $cleanParent
+    }
+
+    if (Test-MakeMkvGenericName $File.Name) {
+        $parentDir = Get-CleanMovieName (Split-Path $File.DirectoryName -Leaf)
+        Write-Log "Generic filename '$($File.Name)' detected — using parent folder '$parentDir' as movie name" "INFO"
+        return $parentDir
+    }
+
+    # Strip common part/pt/part/CD/disc suffixes from filenames when computing group key
+    $base = [System.IO.Path]::GetFileNameWithoutExtension($File.Name)
+    $stripped = $base -replace '\s*-\s*(?:pt|part|cd|disc)\s*\d+$',''
+    $stripped = $stripped -replace '\s*[_-]?part\s*\d+$',''
+
+    $prefix = Get-FilenamePrefix $stripped
+    return Get-CleanMovieName $prefix
+}
+
 $MkvFiles = @(Get-ChildItem -Path $SourceDir -Filter "*.mkv" -File -Recurse | Sort-Object Name)
 
 if ($MkvFiles.Count -eq 0) {
@@ -491,11 +735,13 @@ $MovieFiles = @()
 $ExtraFiles = @()
 
 foreach ($File in $MkvFiles) {
-    if (IsExtra $File.Name) {
+    if (IsExtra $File.FullName) {
         $ExtraFiles += $File
+        Write-Log "Extra detected: $($File.Name) -> type: $(Get-ExtraTypeFromPath $File.FullName)" "INFO"
     }
     else {
         $MovieFiles += $File
+        Write-Log "Not an extra: $($File.Name)" "INFO"
     }
 }
 
@@ -508,27 +754,14 @@ $GroupedFiles = @{}
 
 if ($DirectoryMode -eq "Nested") {
     Write-Log "Processing nested mode (directories contain movies)" "INFO"
-    
-    # Group by subdirectory name, stripping rip timestamps
-    $GroupedFiles = $MovieFiles | Group-Object { 
-        Get-CleanMovieName (Split-Path (Split-Path $_.FullName -Parent) -Leaf)
-    } -AsHashTable -AsString
 }
 else {
     Write-Log "Processing flat mode (files with prefixes)" "INFO"
-
-    # If the filename prefix looks generic, use parent directory name instead
-    $GroupedFiles = $MovieFiles | Group-Object {
-        $prefix = Get-FilenamePrefix $_.Name
-        if (Test-GenericName $prefix) {
-            $parentDir = Get-CleanMovieName (Split-Path $_.DirectoryName -Leaf)
-            Write-Log "Generic filename '$($_.Name)' detected — using parent folder '$parentDir' as movie name" "INFO"
-            $parentDir
-        } else {
-            Get-CleanMovieName $prefix
-        }
-    } -AsHashTable -AsString
 }
+
+$GroupedFiles = $MovieFiles | Group-Object {
+    Get-MovieGroupName $_ $DirectoryMode
+} -AsHashTable -AsString
 
 Write-Log "Grouped files into $($GroupedFiles.Count) movie(s)" "INFO"
 
@@ -547,23 +780,15 @@ $DryRunCopies = @()      # Table-friendly dry-run summary of planned copies
 
 # Process extras first
 foreach ($Extra in $ExtraFiles) {
-    # Get movie name based on directory mode
-    $MovieName = if ($DirectoryMode -eq "Nested") {
-        # In nested mode, parent of parent is the movie dir
-        Get-CleanMovieName (Split-Path (Split-Path $Extra.FullName -Parent) -Leaf)
-    }
-    else {
-        # In flat mode, use parent directory name
-        Get-MovieNameFromExtra $Extra.FullName
-    }
+    $MovieName = Get-MovieNameFromExtra $Extra.FullName
     
     $MoviesWithExtras[$MovieName] = $true
     if (-not $ExtrasPerMovie.ContainsKey($MovieName)) { $ExtrasPerMovie[$MovieName] = 0 }
     $ExtrasPerMovie[$MovieName]++
     
-    $ExtraType = Get-ExtraType $Extra.Name
+    $ExtraType = Get-ExtraTypeFromPath $Extra.FullName
     $PlexDirectory = $ExtraTypeMapping[$ExtraType]
-    $DescriptiveName = Get-ExtraDescriptiveName $Extra.Name
+    $DescriptiveName = Get-ExtraDescriptiveName -Filename $Extra.Name -MovieName $MovieName
     
     Write-Log "[DEBUG] Extra: $($Extra.Name) -> MovieName: $MovieName (Mode: $DirectoryMode)" "INFO"
     
@@ -573,7 +798,10 @@ foreach ($Extra in $ExtraFiles) {
     
     Write-Log "[DEBUG] MovieDir: $MovieDir, ExtraDir: $ExtraDir" "INFO"
     
-    if (-not (Test-Path $ExtraDir)) {
+    if (-not (Test-Path $ExtraDir) -and $DryRun) {
+        Write-Log "[DRY RUN] Would create directory: $ExtraDir" "INFO"
+    }
+    elseif (-not (Test-Path $ExtraDir)) {
         try {
             New-Item -ItemType Directory -Path $ExtraDir -Force | Out-Null
             if (-not (Test-Path $ExtraDir)) {
@@ -650,15 +878,19 @@ foreach ($GroupKey in ($GroupedFiles.Keys | Sort-Object)) {
         $GroupKey
     }
     
-    $UseSubfolder = $Files.Count -gt 1 -or $MoviesWithExtras.ContainsKey($MovieName)
-    $GroupTotalFiles[$MovieName] = $Files.Count + $(if ($ExtrasPerMovie.ContainsKey($MovieName)) { $ExtrasPerMovie[$MovieName] } else { 0 })
+    $TotalFilesForMovie = $Files.Count + $(if ($ExtrasPerMovie.ContainsKey($MovieName)) { $ExtrasPerMovie[$MovieName] } else { 0 })
+    $GroupTotalFiles[$MovieName] = $TotalFilesForMovie
+    $UseSubfolder = $Files.Count -gt 1 -or $MoviesWithExtras.ContainsKey($MovieName) -or $TotalFilesForMovie -gt 1
     
 if ($Files.Count -eq 1) {
         $File = $Files[0]
         
         if ($UseSubfolder) {
             $MovieDir = Join-Path $OutputDir $MovieName
-            if (-not (Test-Path $MovieDir)) {
+            if (-not (Test-Path $MovieDir) -and $DryRun) {
+                Write-Log "[DRY RUN] Would create directory: $MovieDir" "INFO"
+            }
+            elseif (-not (Test-Path $MovieDir)) {
                 New-Item -ItemType Directory -Path $MovieDir -Force | Out-Null
             }
             $OutputFileName = "$MovieName.mp4"
@@ -705,7 +937,10 @@ if ($Files.Count -eq 1) {
         # Multiple files - create directory and encode each as partX or by track number
         $MovieDir = Join-Path $OutputDir $MovieName
         
-        if (-not (Test-Path $MovieDir)) {
+        if (-not (Test-Path $MovieDir) -and $DryRun) {
+            Write-Log "[DRY RUN] Would create directory: $MovieDir" "INFO"
+        }
+        elseif (-not (Test-Path $MovieDir)) {
             try {
                 New-Item -ItemType Directory -Path $MovieDir -Force | Out-Null
                 if (-not (Test-Path $MovieDir)) {
@@ -741,15 +976,12 @@ if ($Files.Count -eq 1) {
         
         # Sort files by track number (nested mode) or disc number (flat mode)
         $SortedFiles = if ($DirectoryMode -eq "Nested") {
-            Write-Log "Sorting by track number (nested mode)" "INFO"
-            $Files | Sort-Object { 
-                $track = Get-TrackNumber $_.Name
-                if ($null -eq $track) { 9999 } else { $track }
-            }
+            Write-Log "Sorting by generic part key (nested mode)" "INFO"
+            $Files | Sort-Object { Get-MoviePartSortKey $_.Name }
         }
         else {
-            Write-Log "Sorting by disc number (flat mode)" "INFO"
-            $Files | Sort-Object { Get-DiscNumber $_.Name }
+            Write-Log "Sorting by generic part key (flat mode)" "INFO"
+            $Files | Sort-Object { Get-MoviePartSortKey $_.Name }
         }
         
         $PartNumber = 1
@@ -835,9 +1067,16 @@ if ($DryRun) {
     Write-Host ""
     Write-Host "========== DRY RUN ENCODE PLAN ==========" -ForegroundColor Cyan
     if ($DryRunPlan.Count -gt 0) {
-        $DryRunPlan |
-            Sort-Object Movie, Kind, Source |
-            Format-Table -Property Movie, Kind, Source, Output -AutoSize -Wrap
+        foreach ($movieGroup in ($DryRunPlan | Sort-Object Movie, Kind, Source | Group-Object Movie)) {
+            Write-Host ""
+            Write-Host $movieGroup.Name -ForegroundColor White
+
+            foreach ($item in $movieGroup.Group) {
+                $outputDisplay = Get-RelativeDisplayPath -Path $item.Output -Root $OutputDir
+                Write-Host ("  {0}: {1}" -f $item.Kind, $item.Source)
+                Write-Host ("    -> {0}" -f $outputDisplay) -ForegroundColor DarkGray
+            }
+        }
     }
     else {
         Write-Host "No encodes planned." -ForegroundColor Yellow
@@ -846,9 +1085,15 @@ if ($DryRun) {
     Write-Host ""
     Write-Host "========== DRY RUN COPY PLAN ==========" -ForegroundColor Cyan
     if ($DryRunCopies.Count -gt 0) {
-        $DryRunCopies |
-            Sort-Object Movie |
-            Format-Table -Property Movie, LocalPath, Destination -AutoSize -Wrap
+        foreach ($copy in ($DryRunCopies | Sort-Object Movie)) {
+            $localDisplay = Get-RelativeDisplayPath -Path $copy.LocalPath -Root $OutputDir
+            $destDisplay = Get-RelativeDisplayPath -Path $copy.Destination -Root $FinalDest
+
+            Write-Host ""
+            Write-Host $copy.Movie -ForegroundColor White
+            Write-Host ("  local: {0}" -f $localDisplay)
+            Write-Host ("  final: {0}" -f $destDisplay) -ForegroundColor DarkGray
+        }
     }
     elseif (-not [string]::IsNullOrWhiteSpace($FinalDest)) {
         Write-Host "No copy jobs planned." -ForegroundColor Yellow

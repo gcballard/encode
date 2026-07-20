@@ -88,9 +88,12 @@ SourceDir/
 ```
 
 The script strips common rip suffixes such as `_YYYYMMDD_HHMMSS` and disc/part
-markers such as `_D01`, `_CD01`, `_DISC01`, and `_PART01`. Generic ripped file
-names such as `c2.mkv`, `t01.mkv`, or `123.mkv` use the parent folder name as
-the movie name.
+markers such as `_D01`, `_CD01`, `_DISC01`, and `_PART01`. Generic MakeMKV-style
+names such as `A1.mkv`, `B1_t00.mkv`, `title_t00.mkv`, `c2.mkv`, `t01.mkv`, or
+`123.mkv` use the parent folder name as the movie name. If a folder contains
+multiple generic MKVs, they are treated as parts of the same movie. If a folder
+contains specifically named movie MKVs, those names are used as separate movie
+names.
 
 ### Movie Output Layouts
 
@@ -129,7 +132,39 @@ Supported Plex extra suffixes are:
 - `-scene`
 - `-short`
 - `-trailer`
+- `-documentary`
 - `-other`
+
+Inline extras can also use a readable movie/type/title pattern:
+
+```text
+SourceDir/
+  Gettysburg (1993)/
+    Gettysburg (1993).mkv
+    Gettysburg (1993) - Featurette - The Battle of Gettysburg.mkv
+```
+
+That outputs:
+
+```text
+Gettysburg (1993)/
+  Gettysburg (1993).mp4
+  Featurettes/
+    The Battle of Gettysburg.mp4
+```
+
+Extras can also be placed in Plex-style subfolders instead of using filename
+suffixes:
+
+```text
+SourceDir/
+  MovieName/
+    MovieName.mkv
+    Trailers/
+      Trailer.mkv
+    Deleted Scenes/
+      Cut Scene.mkv
+```
 
 ## TV Encoding
 
