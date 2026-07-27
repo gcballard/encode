@@ -180,10 +180,10 @@ Point `-SourceDir` at the show root containing `Season NN/` folders:
 
 ```powershell
 # Preview only (dry-run is default)
-.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "X:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json
+.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "Y:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json
 
 # Actually encode all detected seasons
-.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "X:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json -Encode
+.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "Y:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json -Encode
 ```
 
 ### Single season mode
@@ -191,16 +191,16 @@ Point `-SourceDir` at the show root containing `Season NN/` folders:
 Point `-SourceDir` at a specific season folder and pass `-SeasonNumber`:
 
 ```powershell
-.\encode-tv.ps1 -SourceDir "C:\videos\season1" -DestBase "X:\TV" -ShowName "Andor" -SeasonNumber 1 -PresetJson .\plexDVD2025.json -Encode
+.\encode-tv.ps1 -SourceDir "C:\videos\season1" -DestBase "Y:\TV" -ShowName "Andor" -SeasonNumber 1 -PresetJson .\plexDVD2025.json -Encode
 ```
 
 ### TV Output
 
 ```text
-X:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E01.mp4
-X:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E02.mp4
-X:\TV\Andor\Season 01\Andor - S01E01.mp4
-X:\TV\Andor\Season 01\Andor - S01E02.mp4
+Y:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E01.mp4
+Y:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E02.mp4
+Y:\TV\Andor\Season 01\Andor - S01E01.mp4
+Y:\TV\Andor\Season 01\Andor - S01E02.mp4
 ```
 
 ### TV Parameters
@@ -208,7 +208,7 @@ X:\TV\Andor\Season 01\Andor - S01E02.mp4
 | Parameter | Default | Description |
 | --- | --- | --- |
 | `-SourceDir` | Required | Folder with MKVs. Show root (auto-detects `Season NN/` dirs) or single season folder. |
-| `-DestBase` | Required | Base TV library destination (e.g., `X:\TV`). |
+| `-DestBase` | Required | Base TV library destination (e.g., `Y:\TV`). |
 | `-ShowName` | Required | Show name used in folder and filenames (e.g., `Scrubs (2001)`). |
 | `-SeasonNumber` | Auto (`-1`) | Season number. Omit to auto-detect from `Season NN/` subdirectories. Use `0` for specials. |
 | `-PresetJson` | Required | HandBrake preset JSON file. |

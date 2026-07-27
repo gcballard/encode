@@ -46,10 +46,10 @@ USAGE
   .\encode-tv.ps1 -SourceDir <source_path> -DestBase <dest_path> -ShowName <show_name> -PresetJson <preset_path> [options]
 
   Auto-detect seasons (source has Season 01/, Season 02/, ... subdirectories):
-    .\encode-tv.ps1 -SourceDir 'N:\TV\Scrubs' -DestBase 'X:\TV' -ShowName 'Scrubs (2001)' -PresetJson .\plexDVD2025.json
+    .\encode-tv.ps1 -SourceDir 'N:\TV\Scrubs' -DestBase 'Y:\TV' -ShowName 'Scrubs (2001)' -PresetJson .\plexDVD2025.json
 
   Single season explicitly:
-    .\encode-tv.ps1 -SourceDir 'N:\TV\Scrubs\Season 01' -DestBase 'X:\TV' -ShowName 'Scrubs (2001)' -SeasonNumber 1 -PresetJson .\plexDVD2025.json
+    .\encode-tv.ps1 -SourceDir 'N:\TV\Scrubs\Season 01' -DestBase 'Y:\TV' -ShowName 'Scrubs (2001)' -SeasonNumber 1 -PresetJson .\plexDVD2025.json
 
 REQUIRED PARAMETERS
   -SourceDir <source_path>
@@ -57,7 +57,7 @@ REQUIRED PARAMETERS
       Season NN/ subdirectories (auto-detected) or a single season folder.
   -DestBase <dest_path>
       Base output directory where show folders will be created
-      (e.g., 'X:\TV' or 'D:\Media\TV Shows').
+      (e.g., 'Y:\TV' or 'D:\Media\TV Shows').
   -ShowName <show_name>
       TV show name used in output folder and filenames
       (e.g., 'Scrubs (2001)', 'The Office (US)').
@@ -83,28 +83,28 @@ OPTIONAL PARAMETERS
 
 EXAMPLES
   1. Auto-detect all seasons from a show root, preview only:
-     .\encode-tv.ps1 -SourceDir 'N:\TV\Scrubs' -DestBase 'X:\TV' -ShowName 'Scrubs (2001)' -PresetJson .\plexDVD2025.json
+     .\encode-tv.ps1 -SourceDir 'N:\TV\Scrubs' -DestBase 'Y:\TV' -ShowName 'Scrubs (2001)' -PresetJson .\plexDVD2025.json
 
   2. Auto-detect all seasons and encode:
-     .\encode-tv.ps1 -SourceDir 'N:\TV\Scrubs' -DestBase 'X:\TV' -ShowName 'Scrubs (2001)' -PresetJson .\plexDVD2025.json -Encode
+     .\encode-tv.ps1 -SourceDir 'N:\TV\Scrubs' -DestBase 'Y:\TV' -ShowName 'Scrubs (2001)' -PresetJson .\plexDVD2025.json -Encode
 
   3. Single season from a specific folder:
-     .\encode-tv.ps1 -SourceDir 'C:\videos\season1' -DestBase 'X:\TV' -ShowName 'Andor' -SeasonNumber 1 -PresetJson .\plexDVD2025.json -Encode
+     .\encode-tv.ps1 -SourceDir 'C:\videos\season1' -DestBase 'Y:\TV' -ShowName 'Andor' -SeasonNumber 1 -PresetJson .\plexDVD2025.json -Encode
 
   4. Starting from episode 5:
-     .\encode-tv.ps1 -SourceDir 'C:\videos\season2' -DestBase 'X:\TV' -ShowName 'The Office' -SeasonNumber 2 -PresetJson .\plex.json -StartingEpisode 5 -Encode
+     .\encode-tv.ps1 -SourceDir 'C:\videos\season2' -DestBase 'Y:\TV' -ShowName 'The Office' -SeasonNumber 2 -PresetJson .\plex.json -StartingEpisode 5 -Encode
 
   5. Miniseries (Season 0):
-     .\encode-tv.ps1 -SourceDir 'C:\videos\roughriders' -DestBase 'X:\TV' -ShowName 'Rough Riders (1997)' -SeasonNumber 0 -PresetJson .\plexDVD2025.json -Encode
+     .\encode-tv.ps1 -SourceDir 'C:\videos\roughriders' -DestBase 'Y:\TV' -ShowName 'Rough Riders (1997)' -SeasonNumber 0 -PresetJson .\plexDVD2025.json -Encode
 
 OUTPUT STRUCTURE
   <DestBase>\<ShowName>\Season <NN>\<ShowName> - S<NN>E<NN>.mp4
 
   Examples:
-    X:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E01.mp4
-    X:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E02.mp4
-    X:\TV\Andor\Season 01\Andor - S01E01.mp4
-    X:\TV\Andor\Season 01\Andor - S01E02.mp4
+    Y:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E01.mp4
+    Y:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E02.mp4
+    Y:\TV\Andor\Season 01\Andor - S01E01.mp4
+    Y:\TV\Andor\Season 01\Andor - S01E02.mp4
 "@
 }
 

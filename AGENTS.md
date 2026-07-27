@@ -41,13 +41,13 @@ PowerShell scripts for batch encoding ripped MKV media with HandBrake CLI into P
 .\encode-movies.ps1 -SourceDir "N:\Videos" -PresetJson "Z:\HandbrakeStuff\plexDVD2025.json" -PresetName Plex -Encode
 
 # TV encode (auto-detect seasons from subdirectories)
-.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "X:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json
+.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "Y:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json
 
 # TV encode (explicit season)
-.\encode-tv.ps1 -SourceDir "C:\videos\season1" -DestBase "X:\TV" -ShowName "Andor" -SeasonNumber 1 -PresetJson .\plexDVD2025.json
+.\encode-tv.ps1 -SourceDir "C:\videos\season1" -DestBase "Y:\TV" -ShowName "Andor" -SeasonNumber 1 -PresetJson .\plexDVD2025.json
 
 # TV encode with actual encoding
-.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "X:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json -Encode
+.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "Y:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json -Encode
 ```
 
 ## Directory Modes
