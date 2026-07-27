@@ -20,6 +20,7 @@ PowerShell scripts for batch encoding ripped MKV media with HandBrake CLI into P
 - **No build system, no tests, no linter** — scripts are invoked directly
 - **Logging**: uses `Write-Log` helper with `ValidateSet('INFO','ERROR','SUCCESS','WARNING')` — never use other level strings
 - **Parameters**: always use `-SourceDir` (directory), `-PresetJson` (file path), `-PresetName`, `-DryRun`/`-Encode` switches
+- **TV auto-detect**: `-SeasonNumber` defaults to `-1`; when omitted, the script finds `Season NN/` subdirectories automatically
 - **Dry-run by default**: `$DryRun = $true`; `-Encode` switch sets it to `$false`
 - **Extras detection**: suffix-based (`Movie-featurette.mkv`), inline pattern (`Movie - Featurette - Title.mkv`), directory-based (`Movie/Trailers/...`)
 - **Extras types**: `behindthescenes`, `deleted`, `featurette`, `interview`, `scene`, `short`, `trailer`, `documentary`, `other`
@@ -39,8 +40,14 @@ PowerShell scripts for batch encoding ripped MKV media with HandBrake CLI into P
 # With custom paths
 .\encode-movies.ps1 -SourceDir "N:\Videos" -PresetJson "Z:\HandbrakeStuff\plexDVD2025.json" -PresetName Plex -Encode
 
-# TV encode
+# TV encode (auto-detect seasons from subdirectories)
+.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "X:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json
+
+# TV encode (explicit season)
 .\encode-tv.ps1 -SourceDir "C:\videos\season1" -DestBase "X:\TV" -ShowName "Andor" -SeasonNumber 1 -PresetJson .\plexDVD2025.json
+
+# TV encode with actual encoding
+.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "X:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json -Encode
 ```
 
 ## Directory Modes

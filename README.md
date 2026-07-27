@@ -168,33 +168,37 @@ SourceDir/
 
 ## TV Encoding
 
-`encode-tv.ps1` encodes MKV files from one source directory, sorted by file
-name, into a Plex-style show and season folder.
+`encode-tv.ps1` encodes MKV files from one or more season folders into
+Plex-compatible output. It can auto-detect `Season 01/`, `Season 02/`, etc.
+subdirectories or process a single season explicitly. Files are found
+recursively (handles MakeMKV-style disc subdirectories), sorted by disc folder
+then filename, and numbered sequentially.
+
+### Auto-detect mode (recommended)
+
+Point `-SourceDir` at the show root containing `Season NN/` folders:
 
 ```powershell
-.\encode-tv.ps1 `
-  -SourceDir "C:\videos\season1" `
-  -DestBase "X:\TV" `
-  -ShowName "Andor" `
-  -SeasonNumber 1 `
-  -PresetJson .\plexDVD2025.json
+# Preview only (dry-run is default)
+.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "X:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json
+
+# Actually encode all detected seasons
+.\encode-tv.ps1 -SourceDir "N:\Videos\TV\Scrubs" -DestBase "X:\TV" -ShowName "Scrubs (2001)" -PresetJson .\plexDVD2025.json -Encode
 ```
 
-Preview without encoding:
+### Single season mode
+
+Point `-SourceDir` at a specific season folder and pass `-SeasonNumber`:
 
 ```powershell
-.\encode-tv.ps1 `
-  -SourceDir "C:\videos\season1" `
-  -DestBase "X:\TV" `
-  -ShowName "Andor" `
-  -SeasonNumber 1 `
-  -PresetJson .\plexDVD2025.json `
-  -DryRun
+.\encode-tv.ps1 -SourceDir "C:\videos\season1" -DestBase "X:\TV" -ShowName "Andor" -SeasonNumber 1 -PresetJson .\plexDVD2025.json -Encode
 ```
 
-TV output:
+### TV Output
 
 ```text
+X:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E01.mp4
+X:\TV\Scrubs (2001)\Season 01\Scrubs (2001) - S01E02.mp4
 X:\TV\Andor\Season 01\Andor - S01E01.mp4
 X:\TV\Andor\Season 01\Andor - S01E02.mp4
 ```
@@ -203,15 +207,17 @@ X:\TV\Andor\Season 01\Andor - S01E02.mp4
 
 | Parameter | Default | Description |
 | --- | --- | --- |
-| `-SourceDir` | Required | Folder containing episode MKVs. |
-| `-DestBase` | Required | Base TV library destination. |
-| `-ShowName` | Required | Show name used in folder and file names. |
-| `-SeasonNumber` | Required | Season number. Use `0` for specials/miniseries. |
+| `-SourceDir` | Required | Folder with MKVs. Show root (auto-detects `Season NN/` dirs) or single season folder. |
+| `-DestBase` | Required | Base TV library destination (e.g., `X:\TV`). |
+| `-ShowName` | Required | Show name used in folder and filenames (e.g., `Scrubs (2001)`). |
+| `-SeasonNumber` | Auto (`-1`) | Season number. Omit to auto-detect from `Season NN/` subdirectories. Use `0` for specials. |
 | `-PresetJson` | Required | HandBrake preset JSON file. |
 | `-PresetName` | `Plex` | Preset name inside the JSON file. |
-| `-StartingEpisode` | `1` | Episode number to start from. |
-| `-DryRun` | Off | Preview commands without encoding. |
-| `-Help` | Off | Show script help. |
+| `-HandBrakePath` | `handbrakecli` | HandBrake CLI executable or full path. |
+| `-StartingEpisode` | `1` | Episode number to start from (explicit mode only). |
+| `-DryRun` | Enabled | Preview commands without encoding. |
+| `-Encode` | Off | Actually run HandBrake and encode files. |
+| `-Help` | Off | Show script help.
 
 ## Logs And Recovery
 
@@ -219,6 +225,12 @@ Movie logs are written to:
 
 ```text
 logs\encode-movies-YYYYMMDD-HHmmss.log
+```
+
+TV logs are written to:
+
+```text
+logs\encode-tv-YYYYMMDD-HHmmss.log
 ```
 
 `encode-movies.ps1` continues after individual file failures, reports a final
